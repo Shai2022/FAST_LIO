@@ -182,7 +182,19 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
 
     mean_acc      += (cur_acc - mean_acc) / N;
     mean_gyr      += (cur_gyr - mean_gyr) / N;
+   
+     //This part of the equation appears to be a weighted average update to the existing cov_acc value.
+     //The variable N likely represents the number of data points or observations. (N - 1.0) / N is a
+     // scaling factor that adjusts for the degrees of freedom in sample covariance calculations.
+     //(cur_acc - mean_acc).cwiseProduct(cur_acc - mean_acc) * (N - 1.0) / (N * N): 
+     //This part computes the element-wise squared difference between two vectors cur_acc and mean_acc, 
+   //then scales it using (N - 1.0) / (N * N). It's likely computing the contribution to the covariance 
+   // update based on the squared deviations from the mean.  
 
+   //Combining these two parts, the line is updating the cov_acc variable 
+   //based on the current data point's accuracy (cur_acc) and the mean accuracy 
+   //(mean_acc), adjusting for the number of data points (N). It looks like the code is calculating 
+   //a running or incremental covariance computation, where the covariance accumulator is updated as new data points are processed.
     cov_acc = cov_acc * (N - 1.0) / N + (cur_acc - mean_acc).cwiseProduct(cur_acc - mean_acc) * (N - 1.0) / (N * N);
     cov_gyr = cov_gyr * (N - 1.0) / N + (cur_gyr - mean_gyr).cwiseProduct(cur_gyr - mean_gyr) * (N - 1.0) / (N * N);
 
@@ -191,6 +203,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
     N ++;
   }
   state_ikfom init_state = kf_state.get_x();
+  // not sure( maybe:resulting vector points in the direction of the original acceleration but is normalized to the unit of gravity.)
   init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
   
   //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
@@ -198,7 +211,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
   init_state.offset_T_L_I = Lidar_T_wrt_IMU;
   init_state.offset_R_L_I = Lidar_R_wrt_IMU;
   kf_state.change_x(init_state);
-
+  // initial ??
   esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf_state.get_P();
   init_P.setIdentity();
   init_P(6,6) = init_P(7,7) = init_P(8,8) = 0.00001;
@@ -277,8 +290,18 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
 
     /* save the poses at each IMU measurements */
     imu_state = kf_state.get_x();
-    angvel_last = angvel_avr - imu_state.bg;
+   // This line calculates the corrected angular velocity. 
+    //It subtracts the gyroscope bias (bg) from the average angular velocity 
+   // (angvel_avr). This step is adjusting the angular velocity measurements to account for the estimated bias.
+    angvel_last = angvel_avr - imu_state.bg; 
     acc_s_last  = imu_state.rot * (acc_avr - imu_state.ba);
+
+   //In summary, this code is processing IMU data through a series of corrective
+   //steps to obtain accurate angular velocity and specific acceleration measurements. 
+   //It accounts for biases (both gyroscope and accelerometer), applies rotation transformations,
+   //and adds gravitational effects to the acceleration. The result is updated values for 
+   //angvel_last and acc_s_last, which should provide a more accurate representation of the IMU's behavior.
+   
     for(int i=0; i<3; i++)
     {
       acc_s_last[i] += imu_state.grav[i];
