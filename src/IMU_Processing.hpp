@@ -333,6 +333,13 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
     acc_imu<<VEC_FROM_ARRAY(tail->acc);
     angvel_avr<<VEC_FROM_ARRAY(tail->gyr);
 
+
+    //Overall, this code snippet is performing a back-propagation process to undistort
+   //lidar point measurements by compensating for sensor platform motion using IMU pose 
+   //and motion data. It applies transformations to correct for the sensor's motion and 
+   //updates the lidar point coordinates accordingly. The goal is to remove the distortion 
+   //caused by the motion of the sensor platform during lidar data acquisition.
+   
     for(; it_pcl->curvature / double(1000) > head->offset_time; it_pcl --)
     {
       dt = it_pcl->curvature / double(1000) - head->offset_time;
@@ -345,6 +352,11 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
       
       V3D P_i(it_pcl->x, it_pcl->y, it_pcl->z);
       V3D T_ei(pos_imu + vel_imu * dt + 0.5 * acc_imu * dt * dt - imu_state.pos);
+     
+       // **  conjugate **The adjoint matrix, also known as the adjugate or the classical adjoint, 
+     //is a concept used in linear algebra, particularly with square matrices. 
+     //It is related to the determinant and the inverse of a matrix. The adjoint of a matrix
+     //is used to find the inverse of a matrix and to solve systems of linear equations, among other applications.
       V3D P_compensate = imu_state.offset_R_L_I.conjugate() * (imu_state.rot.conjugate() * (R_i * (imu_state.offset_R_L_I * P_i + imu_state.offset_T_L_I) + T_ei) - imu_state.offset_T_L_I);// not accurate!
       
       // save Undistorted points and their rotation
